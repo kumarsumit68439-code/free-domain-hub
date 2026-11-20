@@ -29,7 +29,7 @@ export function SearchBox() {
 
     const suggestions = generateSuggestions(base);
     const exact = FREE_TLDS.map((tld) => `${base}.${tld}`);
-    const ordered = [...new Set([...exact, ...suggestions])].slice(0, 10);
+    const ordered = Array.from(new Set(exact.concat(suggestions))).slice(0, 10);
 
     const checks = await Promise.all(
       ordered.map(async (full) => {
@@ -43,7 +43,9 @@ export function SearchBox() {
   };
 
   const handleRegister = async (fullDomain: string) => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) {
       setMessage({ type: 'error', text: 'Please sign in first to claim a domain.' });
       router.push(`/login?next=/`);
@@ -53,8 +55,8 @@ export function SearchBox() {
     setRegistering(fullDomain);
     setMessage(null);
 
-    const [namePart, tld] = fullDomain.split('.');
-    const { data, error } = await supabase.rpc('claim_domain', {
+    const tld = fullDomain.split('.').pop() || 'free';
+    const { error } = await supabase.rpc('claim_domain', {
       p_name: fullDomain,
       p_tld: tld,
     });
