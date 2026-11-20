@@ -4,72 +4,66 @@ import { Check, Shield, Zap, Globe2, Server, ArrowRightLeft } from 'lucide-react
 const features = [
   {
     icon: Globe2,
-    title: 'Free Domains',
-    desc: 'Claim domains like .free, .space, .online and more — completely free, forever.',
+    title: 'Free *.kozow.com',
+    desc: 'Claim free hostnames like myserver.kozow.com — same family Dynu uses for free DDNS.',
   },
   {
     icon: Server,
-    title: 'Full DNS Control',
-    desc: 'Add A, AAAA, CNAME, TXT, MX, NS records with real-time style responses.',
-  },
-  {
-    icon: ArrowRightLeft,
-    title: 'Domain Transfer',
-    desc: 'Transfer domains in or out with a simple, guided process.',
+    title: 'IP → Active',
+    desc: 'Enter your public IP and the hostname points to it. Update anytime (Dynu-style).',
   },
   {
     icon: Zap,
-    title: 'Instant Activation',
-    desc: 'Domains become active immediately after claiming. No waiting.',
+    title: 'Public DNS',
+    desc: 'With Dynu API key, records go live on the internet under kozow.com nameservers.',
+  },
+  {
+    icon: ArrowRightLeft,
+    title: 'Update API',
+    desc: 'Router-friendly /api/update URL to refresh IP when it changes.',
   },
   {
     icon: Shield,
-    title: 'No Credit Card',
-    desc: 'Truly free. No trials, no upsells, no hidden paid tiers.',
+    title: 'Your account',
+    desc: 'Supabase auth + ownership. Only you manage your hostnames.',
   },
   {
     icon: Check,
-    title: 'Nameservers Ready',
-    desc: 'Get free nameservers and manage everything from one dashboard.',
+    title: 'DNS records',
+    desc: 'A, AAAA, CNAME, TXT, MX and more stored in your FreeDomain database.',
   },
 ];
 
 export default function HomePage() {
   return (
     <div>
-      {/* Hero */}
       <section className="relative overflow-hidden bg-gradient-to-b from-brand-50 via-white to-slate-50 pt-16 pb-20">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-brand-100/40 via-transparent to-transparent" />
         <div className="relative max-w-6xl mx-auto px-4 text-center">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-100 text-emerald-800 text-sm font-medium mb-6">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            100% Free · No Paid Plans
+            Free hostnames on kozow.com
           </div>
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 tracking-tight text-balance">
-            Get Your Own{' '}
+            Free hostname +{' '}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-600 to-brand-400">
-              Free Domain
+              your IP
             </span>
           </h1>
           <p className="mt-5 text-lg sm:text-xl text-slate-600 max-w-2xl mx-auto text-balance">
-            Search, claim and manage free domains with full DNS records, CNAME, TXT, IP,
-            transfer and more — just like a real registrar.
+            Claim <strong>name.kozow.com</strong>, set your IP, and go active — Dynu-style free DDNS with
+            dashboard, records, and update API.
           </p>
 
           <div className="mt-10">
             <SearchBox />
           </div>
-
-          <p className="mt-6 text-sm text-slate-500">
-            Popular free TLDs: .free · .space · .online · .site · .xyz · .fun · .live · .blog · .dev · .app
-          </p>
         </div>
       </section>
 
-      {/* Features */}
       <section className="max-w-6xl mx-auto px-4 py-16">
         <h2 className="text-2xl sm:text-3xl font-bold text-center text-slate-900 mb-12">
-          Everything a real domain needs — for free
+          Like Dynu — built for free kozow.com hostnames
         </h2>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {features.map((f) => {
@@ -87,16 +81,6 @@ export default function HomePage() {
               </div>
             );
           })}
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section className="max-w-4xl mx-auto px-4 pb-20">
-        <div className="rounded-3xl bg-gradient-to-br from-brand-600 to-brand-800 p-8 sm:p-12 text-center text-white shadow-xl shadow-brand-200">
-          <h2 className="text-2xl sm:text-3xl font-bold">Ready to claim your free domain?</h2>
-          <p className="mt-3 text-brand-100 max-w-xl mx-auto">
-            No account required to start. Search above, claim in one click, and manage DNS instantly.
-          </p>
         </div>
       </section>
     </div>
