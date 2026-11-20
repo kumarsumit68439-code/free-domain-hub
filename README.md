@@ -1,45 +1,52 @@
 # Free Domain Hub
 
-**100% Free Domains** with full DNS management — just like a real registrar.
+**Real backend on Supabase** — domains, DNS records, transfers, and traffic are stored in a live PostgreSQL database (project: FreeDomain).
 
-## Features
+## What is real
 
-- Search & claim **free domains** (no paid plans)
-- Full DNS record management: **A, AAAA, CNAME, TXT, MX, NS**
-- Domain Transfer UI
-- Real-time style responses & status
-- Traffic & hosting status (mock)
-- Beautiful modern dashboard
-- Works fully client-side (localStorage)
+| Feature | Implementation |
+|---------|----------------|
+| User accounts | Supabase Auth (email/password) |
+| Domain ownership | `domains` table + RLS |
+| DNS records (A, AAAA, CNAME, TXT, MX, NS, SRV, CAA) | `dns_records` table |
+| Domain transfer in/out | `domain_transfers` table |
+| Traffic | `traffic_logs` table |
+| Availability check | RPC `is_domain_available` |
+| Claim domain | RPC `claim_domain` (atomic + default records) |
 
-## Tech Stack
+## Important note on public DNS
+
+Records and ownership are **real in the database**. Public internet resolution of names like `something.free` requires a real TLD registry or a parent domain you control + authoritative nameservers. This app is the management plane (registrar-style panel). To make names resolve on the open internet you would integrate Cloudflare / deSEC / your own NS and own a domain for free subdomains.
+
+## Stack
 
 - Next.js 14 (App Router)
-- TypeScript
+- Supabase (Auth + Postgres + RLS)
 - Tailwind CSS
-- Lucide Icons
 
-## Deploy on Vercel
+## Supabase project
 
-1. Import this repo in [Vercel](https://vercel.com)
-2. Framework: Next.js (auto-detected)
-3. Deploy → done!
+- Project name: **FreeDomain**
+- URL: `https://igqgtfuhzojadgkvivxa.supabase.co`
 
-Or use Vercel CLI:
-```bash
-npm i -g vercel
-vercel
-```
-
-## Local Development
+## Local setup
 
 ```bash
 npm install
+cp .env.local.example .env.local
+# fill NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000)
+## Vercel deploy
 
----
+1. Import repo `kumarsumit68439-code/free-domain-hub`
+2. Add environment variables:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+3. Deploy
 
-Made for free domain lovers. No credit card. No hidden fees.
+## Auth tip
+
+In Supabase Dashboard → Authentication → Providers → Email:
+- For testing you can disable **Confirm email** so signup logs in immediately.
