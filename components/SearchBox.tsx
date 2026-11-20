@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 
 export function SearchBox() {
   const [query, setQuery] = useState('');
+  const [ip, setIp] = useState('');
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<{ domain: string; available: boolean }[] | null>(null);
   const [registering, setRegistering] = useState<string | null>(null);
@@ -52,6 +53,12 @@ export function SearchBox() {
       return;
     }
 
+    const ipTrim = ip.trim();
+    if (ipTrim && !/^(\d{1,3}\.){3}\d{1,3}$/.test(ipTrim)) {
+      setMessage({ type: 'error', text: 'Invalid IPv4 address. Example: 203.0.113.10' });
+      return;
+    }
+
     setRegistering(fullDomain);
     setMessage(null);
 
@@ -59,6 +66,7 @@ export function SearchBox() {
     const { error } = await supabase.rpc('claim_domain', {
       p_name: fullDomain,
       p_tld: tld,
+      p_ipv4: ipTrim || null,
     });
 
     if (error) {
@@ -68,7 +76,12 @@ export function SearchBox() {
     }
 
     setRegistering(null);
-    setMessage({ type: 'success', text: `Successfully claimed ${fullDomain}! Opening DNS panel...` });
+    setMessage({
+      type: 'success',
+      text: ipTrim
+        ? `${fullDomain} claimed & pointed to ${ipTrim} — active!`
+        : `${fullDomain} claimed! Set an IP on the next page to activate.`,
+    });
     setResults((prev) =>
       prev ? prev.map((r) => (r.domain === fullDomain ? { ...r, available: false } : r)) : null
     );
@@ -81,7 +94,7 @@ export function SearchBox() {
 
   return (
     <div className="w-full max-w-2xl mx-auto">
-      <form onSubmit={handleSearch} className="relative">
+      <form onSubmit={handleSearch} className="space-y-3">
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -89,7 +102,7 @@ export function SearchBox() {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search free domain (e.g. myblog)"
+              placeholder="Hostname (e.g. myserver)"
               className="w-full pl-12 pr-4 py-4 text-lg rounded-2xl border-2 border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-100 outline-none transition-all shadow-sm"
             />
           </div>
@@ -108,6 +121,19 @@ export function SearchBox() {
             )}
           </button>
         </div>
+
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={ip}
+            onChange={(e) => setIp(e.target.value)}
+            placeholder="Your IP (optional) e.g. 203.0.113.10 — Dynu style connect"
+            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none text-sm font-mono"
+          />
+        </div>
+        <p className="text-xs text-slate-500 text-left">
+          IP daalne se domain turant <strong>A record</strong> se connect ho jayega (Dynu jaisa). Baad mein bhi update kar sakte ho.
+        </p>
       </form>
 
       {message && (
@@ -130,7 +156,7 @@ export function SearchBox() {
       {results && (
         <div className="mt-6 space-y-3">
           <p className="text-sm text-slate-500 font-medium">
-            {results.filter((r) => r.available).length} free domains available (live check)
+            {results.filter((r) => r.available).length} free hostnames available
           </p>
           {results.map((r) => (
             <div
@@ -146,7 +172,11 @@ export function SearchBox() {
                 <div>
                   <p className="font-semibold text-slate-900">{r.domain}</p>
                   <p className="text-xs text-slate-500">
-                    {r.available ? 'Available · Free forever · Stored in Supabase' : 'Already taken'}
+                    {r.available
+                      ? ip.trim()
+                        ? `Will point to ${ip.trim()}`
+                        : 'Available · set IP on claim or later'
+                      : 'Already taken'}
                   </p>
                 </div>
               </div>
@@ -159,10 +189,10 @@ export function SearchBox() {
                   {registering === r.domain ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Claiming...
+                      Connecting...
                     </>
                   ) : (
-                    'Claim Free'
+                    'Connect'
                   )}
                 </button>
               )}
