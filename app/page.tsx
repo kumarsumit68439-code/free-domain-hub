@@ -5,32 +5,32 @@ const features = [
   {
     icon: Globe2,
     title: 'Free *.kozow.com',
-    desc: 'Claim free hostnames like myserver.kozow.com — same family Dynu uses for free DDNS.',
+    desc: 'Dynu-style free hostnames. IP set karo, Dynu API se public DNS active.',
   },
   {
     icon: Server,
-    title: 'IP → Active',
-    desc: 'Enter your public IP and the hostname points to it. Update anytime (Dynu-style).',
+    title: 'Own domain',
+    desc: 'Apna kharida hua domain (myblog.com) yahan add karo, IP + DNS records manage karo.',
   },
   {
     icon: Zap,
-    title: 'Public DNS',
-    desc: 'With Dynu API key, records go live on the internet under kozow.com nameservers.',
+    title: 'IP → Active',
+    desc: 'Public IP daalo — A record update. Router update URL bhi milti hai.',
   },
   {
     icon: ArrowRightLeft,
-    title: 'Update API',
-    desc: 'Router-friendly /api/update URL to refresh IP when it changes.',
+    title: 'Transfer',
+    desc: 'Domain transfer in/out requests Supabase mein save.',
   },
   {
     icon: Shield,
-    title: 'Your account',
-    desc: 'Supabase auth + ownership. Only you manage your hostnames.',
+    title: 'Secure account',
+    desc: 'Supabase Auth + RLS — sirf tumhare domains.',
   },
   {
     icon: Check,
-    title: 'DNS records',
-    desc: 'A, AAAA, CNAME, TXT, MX and more stored in your FreeDomain database.',
+    title: 'Full DNS panel',
+    desc: 'A, AAAA, CNAME, TXT, MX, NS — live database.',
   },
 ];
 
@@ -42,17 +42,17 @@ export default function HomePage() {
         <div className="relative max-w-6xl mx-auto px-4 text-center">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-100 text-emerald-800 text-sm font-medium mb-6">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            Free hostnames on kozow.com
+            Free kozow.com + Own domains
           </div>
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 tracking-tight text-balance">
-            Free hostname +{' '}
+            Free hostname{' '}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-600 to-brand-400">
-              your IP
+              &amp; own domain
             </span>
           </h1>
           <p className="mt-5 text-lg sm:text-xl text-slate-600 max-w-2xl mx-auto text-balance">
-            Claim <strong>name.kozow.com</strong>, set your IP, and go active — Dynu-style free DDNS with
-            dashboard, records, and update API.
+            Dynu wala free <strong>*.kozow.com</strong> rahega, aur saath mein apna domain bhi add karke IP + DNS
+            manage kar sakte ho.
           </p>
 
           <div className="mt-10">
@@ -62,9 +62,7 @@ export default function HomePage() {
       </section>
 
       <section className="max-w-6xl mx-auto px-4 py-16">
-        <h2 className="text-2xl sm:text-3xl font-bold text-center text-slate-900 mb-12">
-          Like Dynu — built for free kozow.com hostnames
-        </h2>
+        <h2 className="text-2xl sm:text-3xl font-bold text-center text-slate-900 mb-12">Do modes — ek panel</h2>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {features.map((f) => {
             const Icon = f.icon;

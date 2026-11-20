@@ -2,11 +2,17 @@
 
 import { useState } from 'react';
 import { Search, Loader2, CheckCircle2, XCircle } from 'lucide-react';
-import { PARENT_DOMAIN, isValidDomainName, generateSuggestions } from '@/lib/types';
+import {
+  PARENT_DOMAIN,
+  isValidHostnameLabel,
+  isValidOwnDomain,
+  generateSuggestions,
+} from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 
 export function SearchBox() {
+  const [mode, setMode] = useState<'free' | 'own'>('free');
   const [query, setQuery] = useState('');
   const [ip, setIp] = useState('');
   const [searching, setSearching] = useState(false);
@@ -18,25 +24,39 @@ export function SearchBox() {
 
   const handleSearch = async (e?: React.FormEvent) => {
     e?.preventDefault();
+    setMessage(null);
+    setResults(null);
+
+    if (mode === 'own') {
+      const full = query.trim().toLowerCase();
+      if (!isValidOwnDomain(full)) {
+        setMessage({
+          type: 'error',
+          text: 'Enter a full domain you own, e.g. myblog.com or home.example.org',
+        });
+        return;
+      }
+      setSearching(true);
+      const { data, error } = await supabase.rpc('is_domain_available', { check_name: full });
+      setResults([{ domain: full, available: error ? false : Boolean(data) }]);
+      setSearching(false);
+      return;
+    }
+
     const base = query.trim().toLowerCase().split('.')[0];
-    if (!base || !isValidDomainName(base)) {
-      setMessage({ type: 'error', text: 'Please enter a valid name (letters, numbers, hyphens only)' });
+    if (!base || !isValidHostnameLabel(base)) {
+      setMessage({ type: 'error', text: 'Valid hostname only (letters, numbers, hyphens)' });
       return;
     }
 
     setSearching(true);
-    setMessage(null);
-    setResults(null);
-
     const ordered = generateSuggestions(base);
-
     const checks = await Promise.all(
       ordered.map(async (full) => {
         const { data, error } = await supabase.rpc('is_domain_available', { check_name: full });
         return { domain: full, available: error ? false : Boolean(data) };
       })
     );
-
     setResults(checks);
     setSearching(false);
   };
@@ -46,7 +66,7 @@ export function SearchBox() {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-      setMessage({ type: 'error', text: 'Please sign in first to claim a hostname.' });
+      setMessage({ type: 'error', text: 'Please sign in first.' });
       router.push(`/login?next=/`);
       return;
     }
@@ -63,21 +83,22 @@ export function SearchBox() {
     const res = await fetch('/api/claim', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hostname: fullDomain, ipv4: ipTrim || null }),
+      body: JSON.stringify({
+        mode,
+        hostname: fullDomain,
+        ipv4: ipTrim || null,
+      }),
     });
     const json = await res.json();
 
     if (!res.ok) {
-      setMessage({ type: 'error', text: json.error || 'Claim failed' });
+      setMessage({ type: 'error', text: json.error || 'Failed' });
       setRegistering(null);
       return;
     }
 
     setRegistering(null);
-    setMessage({
-      type: 'success',
-      text: json.message || `Claimed ${fullDomain}`,
-    });
+    setMessage({ type: 'success', text: json.message || `Added ${fullDomain}` });
     setResults((prev) =>
       prev ? prev.map((r) => (r.domain === fullDomain ? { ...r, available: false } : r)) : null
     );
@@ -90,6 +111,36 @@ export function SearchBox() {
 
   return (
     <div className="w-full max-w-2xl mx-auto">
+      {/* Mode tabs */}
+      <div className="flex rounded-xl bg-slate-100 p-1 mb-4">
+        <button
+          type="button"
+          onClick={() => {
+            setMode('free');
+            setResults(null);
+            setMessage(null);
+          }}
+          className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
+            mode === 'free' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
+          }`}
+        >
+          Free · *.{PARENT_DOMAIN}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setMode('own');
+            setResults(null);
+            setMessage(null);
+          }}
+          className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-colors ${
+            mode === 'own' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
+          }`}
+        >
+          Own domain
+        </button>
+      </div>
+
       <form onSubmit={handleSearch} className="space-y-3">
         <div className="flex gap-2">
           <div className="relative flex-1">
@@ -98,7 +149,11 @@ export function SearchBox() {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder={`Hostname (e.g. myserver → myserver.${PARENT_DOMAIN})`}
+              placeholder={
+                mode === 'free'
+                  ? `Hostname (e.g. myserver → myserver.${PARENT_DOMAIN})`
+                  : 'Your domain (e.g. myblog.com)'
+              }
               className="w-full pl-12 pr-4 py-4 text-lg rounded-2xl border-2 border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-100 outline-none transition-all shadow-sm"
             />
           </div>
@@ -110,7 +165,7 @@ export function SearchBox() {
             {searching ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                Searching...
+                ...
               </>
             ) : (
               'Search'
@@ -122,11 +177,21 @@ export function SearchBox() {
           type="text"
           value={ip}
           onChange={(e) => setIp(e.target.value)}
-          placeholder="Your public IP (optional) e.g. 203.0.113.10"
+          placeholder="Public IP (optional) e.g. 203.0.113.10"
           className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-brand-500 outline-none text-sm font-mono"
         />
+
         <p className="text-xs text-slate-500 text-left">
-          Free hostnames on <strong>{PARENT_DOMAIN}</strong> — IP set karte hi Dynu pe public DNS active (API key configured ho to).
+          {mode === 'free' ? (
+            <>
+              <strong>Free Dynu-style:</strong> hostname on {PARENT_DOMAIN}. IP + Dynu API key = public DNS.
+            </>
+          ) : (
+            <>
+              <strong>Own domain:</strong> jo domain tumhare paas hai (GoDaddy/Namecheap/etc). Yahan manage karo + IP set
+              karo; registrar pe A record apne IP pe point karo.
+            </>
+          )}
         </p>
       </form>
 
@@ -150,12 +215,12 @@ export function SearchBox() {
       {results && (
         <div className="mt-6 space-y-3">
           <p className="text-sm text-slate-500 font-medium">
-            {results.filter((r) => r.available).length} free *.{PARENT_DOMAIN} hostnames available
+            {results.filter((r) => r.available).length} available
           </p>
           {results.map((r) => (
             <div
               key={r.domain}
-              className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow"
+              className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-200 shadow-sm"
             >
               <div className="flex items-center gap-3">
                 {r.available ? (
@@ -167,10 +232,12 @@ export function SearchBox() {
                   <p className="font-semibold text-slate-900">{r.domain}</p>
                   <p className="text-xs text-slate-500">
                     {r.available
-                      ? ip.trim()
+                      ? mode === 'own'
+                        ? 'Your domain · add to dashboard'
+                        : ip.trim()
                         ? `Will point to ${ip.trim()}`
-                        : 'Available · set IP on claim or later'
-                      : 'Already taken'}
+                        : `Free on ${PARENT_DOMAIN}`
+                      : 'Already taken here'}
                   </p>
                 </div>
               </div>
@@ -183,8 +250,10 @@ export function SearchBox() {
                   {registering === r.domain ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Connecting...
+                      ...
                     </>
+                  ) : mode === 'own' ? (
+                    'Add domain'
                   ) : (
                     'Connect'
                   )}
