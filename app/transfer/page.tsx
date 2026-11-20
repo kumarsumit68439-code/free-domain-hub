@@ -203,7 +203,8 @@ export default function TransferPage() {
             </div>
 
             <button
-              type="submit"lando={loading}
+              type="submit"
+              disabled={loading}
               className="w-full py-3.5 bg-slate-800 hover:bg-slate-900 disabled:bg-slate-500 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors"
             >
               {loading ? (
