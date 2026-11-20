@@ -21,6 +21,7 @@ export interface Domain {
   ipv4: string | null;
   ipv6: string | null;
   update_token: string | null;
+  dynu_id: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -57,18 +58,10 @@ export interface TrafficLog {
   recorded_at: string;
 }
 
-export const FREE_TLDS = [
-  'free',
-  'space',
-  'online',
-  'site',
-  'xyz',
-  'fun',
-  'live',
-  'blog',
-  'dev',
-  'app',
-] as const;
+/** Free hostnames are subdomains of kozow.com (Dynu free DDNS parent) */
+export const PARENT_DOMAIN = 'kozow.com';
+
+export const FREE_TLDS = ['kozow.com'] as const;
 
 export type FreeTld = (typeof FREE_TLDS)[number];
 
@@ -79,15 +72,11 @@ export function isValidDomainName(name: string): boolean {
 
 export function generateSuggestions(base: string): string[] {
   const clean = base.toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 20) || 'my';
-  const suffixes = ['hub', 'zone', 'now', 'hq', 'pro', 'lab', 'cloud', 'web'];
+  const suffixes = ['', 'hub', 'zone', 'now', 'hq', 'pro', 'lab', 'cloud', 'web', 'home', 'pc', 'nas'];
   const out: string[] = [];
-  FREE_TLDS.forEach((tld) => {
-    out.push(`${clean}.${tld}`);
-  });
   suffixes.forEach((s) => {
-    FREE_TLDS.slice(0, 4).forEach((tld) => {
-      out.push(`${clean}${s}.${tld}`);
-    });
+    const host = s ? `${clean}${s}` : clean;
+    out.push(`${host}.${PARENT_DOMAIN}`);
   });
   return Array.from(new Set(out)).slice(0, 12);
 }
