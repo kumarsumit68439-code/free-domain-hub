@@ -22,6 +22,7 @@ export interface Domain {
   ipv6: string | null;
   update_token: string | null;
   dynu_id: number | null;
+  is_own: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -58,16 +59,27 @@ export interface TrafficLog {
   recorded_at: string;
 }
 
-/** Free hostnames are subdomains of kozow.com (Dynu free DDNS parent) */
+/** Free Dynu-style parent */
 export const PARENT_DOMAIN = 'kozow.com';
 
 export const FREE_TLDS = ['kozow.com'] as const;
 
 export type FreeTld = (typeof FREE_TLDS)[number];
 
-export function isValidDomainName(name: string): boolean {
+export function isValidHostnameLabel(name: string): boolean {
   if (!name || name.length < 1 || name.length > 63) return false;
   return /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/i.test(name);
+}
+
+/** Own domain: example.com or sub.example.com */
+export function isValidOwnDomain(name: string): boolean {
+  const n = name.toLowerCase().trim();
+  if (n.length < 3 || n.length > 253) return false;
+  if (!n.includes('.')) return false;
+  if (n.endsWith('.')) return false;
+  const parts = n.split('.');
+  if (parts.length < 2) return false;
+  return parts.every((p) => isValidHostnameLabel(p));
 }
 
 export function generateSuggestions(base: string): string[] {
@@ -79,4 +91,9 @@ export function generateSuggestions(base: string): string[] {
     out.push(`${host}.${PARENT_DOMAIN}`);
   });
   return Array.from(new Set(out)).slice(0, 12);
+}
+
+/** @deprecated use isValidHostnameLabel */
+export function isValidDomainName(name: string): boolean {
+  return isValidHostnameLabel(name);
 }
