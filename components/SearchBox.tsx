@@ -2,9 +2,8 @@
 
 import { useState } from 'react';
 import { Search, Loader2, CheckCircle2, XCircle } from 'lucide-react';
-import { FREE_TLDS, isValidDomainName, generateSuggestions } from '@/lib/tld';
-import { getDomains, addDomain, createId } from '@/lib/storage';
-import { Domain } from '@/lib/types';
+import { FREE_TLDS, isValidDomainName, generateSuggestions } from '@/lib/types';
+import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 
 export function SearchBox() {
@@ -14,12 +13,13 @@ export function SearchBox() {
   const [registering, setRegistering] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const router = useRouter();
+  const supabase = createClient();
 
   const handleSearch = async (e?: React.FormEvent) => {
     e?.preventDefault();
     const base = query.trim().toLowerCase().split('.')[0];
     if (!base || !isValidDomainName(base)) {
-      setMessage({ type: 'error', text: 'Please enter a valid domain name (letters, numbers, hyphens only)' });
+      setMessage({ type: 'error', text: 'Please enter a valid name (letters, numbers, hyphens only)' });
       return;
     }
 
@@ -27,93 +27,54 @@ export function SearchBox() {
     setMessage(null);
     setResults(null);
 
-    // Simulate real API delay
-    await new Promise((r) => setTimeout(r, 800 + Math.random() * 600));
-
-    const existing = getDomains().map((d) => d.name.toLowerCase());
     const suggestions = generateSuggestions(base);
-
-    const res = suggestions.map((full) => ({
-      domain: full,
-      available: !existing.includes(full.toLowerCase()),
-    }));
-
-    // Always put exact match first if possible
     const exact = FREE_TLDS.map((tld) => `${base}.${tld}`);
-    const ordered = [
-      ...exact.map((d) => ({
-        domain: d,
-        available: !existing.includes(d.toLowerCase()),
-      })),
-      ...res.filter((r) => !exact.includes(r.domain)),
-    ].slice(0, 10);
+    const ordered = [...new Set([...exact, ...suggestions])].slice(0, 10);
 
-    setResults(ordered);
+    const checks = await Promise.all(
+      ordered.map(async (full) => {
+        const { data, error } = await supabase.rpc('is_domain_available', { check_name: full });
+        return { domain: full, available: error ? false : Boolean(data) };
+      })
+    );
+
+    setResults(checks);
     setSearching(false);
   };
 
   const handleRegister = async (fullDomain: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setMessage({ type: 'error', text: 'Please sign in first to claim a domain.' });
+      router.push(`/login?next=/`);
+      return;
+    }
+
     setRegistering(fullDomain);
     setMessage(null);
 
-    await new Promise((r) => setTimeout(r, 1200)); // real response feel
-
-    const [name, tld] = fullDomain.split('.');
-    const now = new Date();
-    const expires = new Date(now);
-    expires.setFullYear(expires.getFullYear() + 100); // free forever
-
-    const newDomain: Domain = {
-      id: createId(),
-      name: fullDomain,
-      tld,
-      status: 'active',
-      registeredAt: now.toISOString(),
-      expiresAt: expires.toISOString(),
-      nameservers: ['ns1.freedomainhub.com', 'ns2.freedomainhub.com'],
-      records: [
-        {
-          id: createId(),
-          type: 'A',
-          name: '@',
-          value: '76.76.21.21', // Vercel-like IP mock
-          ttl: 3600,
-          createdAt: now.toISOString(),
-        },
-        {
-          id: createId(),
-          type: 'CNAME',
-          name: 'www',
-          value: fullDomain,
-          ttl: 3600,
-          createdAt: now.toISOString(),
-        },
-      ],
-      traffic: {
-        requests24h: Math.floor(Math.random() * 50),
-        bandwidthMB: Math.floor(Math.random() * 10),
-      },
-    };
-
-    addDomain(newDomain);
-    setRegistering(null);
-    setMessage({
-      type: 'success',
-      text: `Successfully registered ${fullDomain}! Redirecting to dashboard...`,
+    const [namePart, tld] = fullDomain.split('.');
+    const { data, error } = await supabase.rpc('claim_domain', {
+      p_name: fullDomain,
+      p_tld: tld,
     });
 
-    // Refresh results to show taken
+    if (error) {
+      setMessage({ type: 'error', text: error.message || 'Failed to claim domain' });
+      setRegistering(null);
+      return;
+    }
+
+    setRegistering(null);
+    setMessage({ type: 'success', text: `Successfully claimed ${fullDomain}! Opening DNS panel...` });
     setResults((prev) =>
-      prev
-        ? prev.map((r) =>
-            r.domain === fullDomain ? { ...r, available: false } : r
-          )
-        : null
+      prev ? prev.map((r) => (r.domain === fullDomain ? { ...r, available: false } : r)) : null
     );
 
     setTimeout(() => {
       router.push(`/domain/${encodeURIComponent(fullDomain)}`);
-    }, 1500);
+      router.refresh();
+    }, 1000);
   };
 
   return (
@@ -167,7 +128,7 @@ export function SearchBox() {
       {results && (
         <div className="mt-6 space-y-3">
           <p className="text-sm text-slate-500 font-medium">
-            {results.filter((r) => r.available).length} free domains available
+            {results.filter((r) => r.available).length} free domains available (live check)
           </p>
           {results.map((r) => (
             <div
@@ -183,7 +144,7 @@ export function SearchBox() {
                 <div>
                   <p className="font-semibold text-slate-900">{r.domain}</p>
                   <p className="text-xs text-slate-500">
-                    {r.available ? 'Available · 100% Free forever' : 'Already taken'}
+                    {r.available ? 'Available · Free forever · Stored in Supabase' : 'Already taken'}
                   </p>
                 </div>
               </div>
