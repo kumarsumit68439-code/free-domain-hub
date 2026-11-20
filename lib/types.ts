@@ -86,5 +86,5 @@ export function generateSuggestions(base: string): string[] {
       out.push(`${clean}${s}.${tld}`);
     });
   });
-  return [...new Set(out)].slice(0, 12);
+  return Array.from(new Set(out)).slice(0, 12);
 }
