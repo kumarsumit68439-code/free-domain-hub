@@ -18,6 +18,9 @@ export interface Domain {
   registered_at: string;
   expires_at: string;
   nameservers: string[];
+  ipv4: string | null;
+  ipv6: string | null;
+  update_token: string | null;
   created_at: string;
   updated_at: string;
 }
