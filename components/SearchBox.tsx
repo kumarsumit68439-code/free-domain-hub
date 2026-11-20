@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Search, Loader2, CheckCircle2, XCircle } from 'lucide-react';
-import { FREE_TLDS, isValidDomainName, generateSuggestions } from '@/lib/types';
+import { PARENT_DOMAIN, isValidDomainName, generateSuggestions } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 
@@ -28,9 +28,7 @@ export function SearchBox() {
     setMessage(null);
     setResults(null);
 
-    const suggestions = generateSuggestions(base);
-    const exact = FREE_TLDS.map((tld) => `${base}.${tld}`);
-    const ordered = Array.from(new Set(exact.concat(suggestions))).slice(0, 10);
+    const ordered = generateSuggestions(base);
 
     const checks = await Promise.all(
       ordered.map(async (full) => {
@@ -48,29 +46,29 @@ export function SearchBox() {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) {
-      setMessage({ type: 'error', text: 'Please sign in first to claim a domain.' });
+      setMessage({ type: 'error', text: 'Please sign in first to claim a hostname.' });
       router.push(`/login?next=/`);
       return;
     }
 
     const ipTrim = ip.trim();
     if (ipTrim && !/^(\d{1,3}\.){3}\d{1,3}$/.test(ipTrim)) {
-      setMessage({ type: 'error', text: 'Invalid IPv4 address. Example: 203.0.113.10' });
+      setMessage({ type: 'error', text: 'Invalid IPv4. Example: 203.0.113.10' });
       return;
     }
 
     setRegistering(fullDomain);
     setMessage(null);
 
-    const tld = fullDomain.split('.').pop() || 'free';
-    const { error } = await supabase.rpc('claim_domain', {
-      p_name: fullDomain,
-      p_tld: tld,
-      p_ipv4: ipTrim || null,
+    const res = await fetch('/api/claim', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hostname: fullDomain, ipv4: ipTrim || null }),
     });
+    const json = await res.json();
 
-    if (error) {
-      setMessage({ type: 'error', text: error.message || 'Failed to claim domain' });
+    if (!res.ok) {
+      setMessage({ type: 'error', text: json.error || 'Claim failed' });
       setRegistering(null);
       return;
     }
@@ -78,9 +76,7 @@ export function SearchBox() {
     setRegistering(null);
     setMessage({
       type: 'success',
-      text: ipTrim
-        ? `${fullDomain} claimed & pointed to ${ipTrim} — active!`
-        : `${fullDomain} claimed! Set an IP on the next page to activate.`,
+      text: json.message || `Claimed ${fullDomain}`,
     });
     setResults((prev) =>
       prev ? prev.map((r) => (r.domain === fullDomain ? { ...r, available: false } : r)) : null
@@ -89,7 +85,7 @@ export function SearchBox() {
     setTimeout(() => {
       router.push(`/domain/${encodeURIComponent(fullDomain)}`);
       router.refresh();
-    }, 1000);
+    }, 1200);
   };
 
   return (
@@ -102,7 +98,7 @@ export function SearchBox() {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Hostname (e.g. myserver)"
+              placeholder={`Hostname (e.g. myserver → myserver.${PARENT_DOMAIN})`}
               className="w-full pl-12 pr-4 py-4 text-lg rounded-2xl border-2 border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-100 outline-none transition-all shadow-sm"
             />
           </div>
@@ -122,17 +118,15 @@ export function SearchBox() {
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            value={ip}
-            onChange={(e) => setIp(e.target.value)}
-            placeholder="Your IP (optional) e.g. 203.0.113.10 — Dynu style connect"
-            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none text-sm font-mono"
-          />
-        </div>
+        <input
+          type="text"
+          value={ip}
+          onChange={(e) => setIp(e.target.value)}
+          placeholder="Your public IP (optional) e.g. 203.0.113.10"
+          className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-brand-500 outline-none text-sm font-mono"
+        />
         <p className="text-xs text-slate-500 text-left">
-          IP daalne se domain turant <strong>A record</strong> se connect ho jayega (Dynu jaisa). Baad mein bhi update kar sakte ho.
+          Free hostnames on <strong>{PARENT_DOMAIN}</strong> — IP set karte hi Dynu pe public DNS active (API key configured ho to).
         </p>
       </form>
 
@@ -156,7 +150,7 @@ export function SearchBox() {
       {results && (
         <div className="mt-6 space-y-3">
           <p className="text-sm text-slate-500 font-medium">
-            {results.filter((r) => r.available).length} free hostnames available
+            {results.filter((r) => r.available).length} free *.{PARENT_DOMAIN} hostnames available
           </p>
           {results.map((r) => (
             <div
@@ -184,7 +178,7 @@ export function SearchBox() {
                 <button
                   onClick={() => handleRegister(r.domain)}
                   disabled={!!registering}
-                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white text-sm font-semibold rounded-xl transition-colors flex items-center gap-2"
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white text-sm font-semibold rounded-xl flex items-center gap-2"
                 >
                   {registering === r.domain ? (
                     <>

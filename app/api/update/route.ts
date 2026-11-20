@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { findDynuDomainId, isDynuConfigured, updateDynuIp } from '@/lib/dynu';
 
 /**
- * Dynu-compatible IP update endpoint
- * GET /api/update?hostname=name.free&token=TOKEN&myip=1.2.3.4
- * Returns plain text: good | badauth | nochg | badip
+ * Dynu-compatible IP update
+ * GET /api/update?hostname=name.kozow.com&token=TOKEN&myip=1.2.3.4
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -19,7 +19,6 @@ export async function GET(request: NextRequest) {
   let myip = searchParams.get('myip') || searchParams.get('ip') || searchParams.get('ipv4');
   const myipv6 = searchParams.get('myipv6') || searchParams.get('ipv6');
 
-  // Auto-detect client IP if myip=auto or missing (optional)
   if (!myip || myip === 'auto') {
     myip =
       request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
@@ -28,25 +27,15 @@ export async function GET(request: NextRequest) {
   }
 
   if (!hostname || !token) {
-    return new NextResponse('badauth', {
-      status: 401,
-      headers: { 'Content-Type': 'text/plain' },
-    });
+    return new NextResponse('badauth', { status: 401, headers: { 'Content-Type': 'text/plain' } });
   }
 
   if (!myip && !myipv6) {
-    return new NextResponse('badip', {
-      status: 400,
-      headers: { 'Content-Type': 'text/plain' },
-    });
+    return new NextResponse('badip', { status: 400, headers: { 'Content-Type': 'text/plain' } });
   }
 
-  // Basic IPv4 validation
   if (myip && !/^(\d{1,3}\.){3}\d{1,3}$/.test(myip)) {
-    return new NextResponse('badip', {
-      status: 400,
-      headers: { 'Content-Type': 'text/plain' },
-    });
+    return new NextResponse('badip', { status: 400, headers: { 'Content-Type': 'text/plain' } });
   }
 
   const supabase = createClient(
@@ -62,17 +51,37 @@ export async function GET(request: NextRequest) {
   });
 
   if (error) {
-    return new NextResponse('badauth', {
-      status: 401,
-      headers: { 'Content-Type': 'text/plain' },
-    });
+    return new NextResponse('badauth', { status: 401, headers: { 'Content-Type': 'text/plain' } });
   }
 
   const result = (data as string) || 'badauth';
-  const status = result === 'good' || result === 'nochg' ? 200 : 401;
+  if (result !== 'good' && result !== 'nochg') {
+    return new NextResponse(result, { status: 401, headers: { 'Content-Type': 'text/plain' } });
+  }
 
-  return new NextResponse(result, {
-    status,
-    headers: { 'Content-Type': 'text/plain' },
-  });
+  // Push to Dynu for real public DNS
+  if (myip && isDynuConfigured()) {
+    try {
+      const { data: row } = await supabase
+        .from('domains')
+        .select('dynu_id, name')
+        .eq('name', hostname.toLowerCase())
+        .maybeSingle();
+
+      let dynuId = row?.dynu_id as number | null;
+      if (!dynuId) {
+        dynuId = await findDynuDomainId(hostname.toLowerCase());
+        if (dynuId && row) {
+          await supabase.from('domains').update({ dynu_id: dynuId }).eq('name', hostname.toLowerCase());
+        }
+      }
+      if (dynuId) {
+        await updateDynuIp(dynuId, myip);
+      }
+    } catch {
+      // DB update succeeded; Dynu may fail — still return good for client
+    }
+  }
+
+  return new NextResponse(result, { status: 200, headers: { 'Content-Type': 'text/plain' } });
 }
