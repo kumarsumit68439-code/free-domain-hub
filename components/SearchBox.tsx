@@ -32,7 +32,7 @@ export function SearchBox() {
       if (!isValidOwnDomain(full)) {
         setMessage({
           type: 'error',
-          text: 'Enter a full domain you own, e.g. myblog.com or home.example.org',
+          text: 'Enter a full domain you own, e.g. myblog.com',
         });
         return;
       }
@@ -92,7 +92,10 @@ export function SearchBox() {
     const json = await res.json();
 
     if (!res.ok) {
-      setMessage({ type: 'error', text: json.error || 'Failed' });
+      setMessage({
+        type: 'error',
+        text: json.error || json.hint || 'Failed',
+      });
       setRegistering(null);
       return;
     }
@@ -111,7 +114,6 @@ export function SearchBox() {
 
   return (
     <div className="w-full max-w-2xl mx-auto">
-      {/* Mode tabs */}
       <div className="flex rounded-xl bg-slate-100 p-1 mb-4">
         <button
           type="button"
@@ -162,14 +164,7 @@ export function SearchBox() {
             disabled={searching}
             className="px-8 py-4 bg-brand-600 hover:bg-brand-700 disabled:bg-brand-400 text-white font-semibold rounded-2xl transition-colors shadow-lg shadow-brand-200 flex items-center gap-2"
           >
-            {searching ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                ...
-              </>
-            ) : (
-              'Search'
-            )}
+            {searching ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Search'}
           </button>
         </div>
 
@@ -184,12 +179,12 @@ export function SearchBox() {
         <p className="text-xs text-slate-500 text-left">
           {mode === 'free' ? (
             <>
-              <strong>Free Dynu-style:</strong> hostname on {PARENT_DOMAIN}. IP + Dynu API key = public DNS.
+              <strong>Free Dynu:</strong> *.{PARENT_DOMAIN} — DYNU_API_KEY se public DNS.
             </>
           ) : (
             <>
-              <strong>Own domain:</strong> jo domain tumhare paas hai (GoDaddy/Namecheap/etc). Yahan manage karo + IP set
-              karo; registrar pe A record apne IP pe point karo.
+              <strong>Own domain + Cloudflare:</strong> domain Cloudflare pe ek baar add ho, phir yahan IP daalte hi A
+              record <em>auto</em> banega — registrar pe baar-baar record add nahi karna.
             </>
           )}
         </p>
@@ -214,9 +209,6 @@ export function SearchBox() {
 
       {results && (
         <div className="mt-6 space-y-3">
-          <p className="text-sm text-slate-500 font-medium">
-            {results.filter((r) => r.available).length} available
-          </p>
           {results.map((r) => (
             <div
               key={r.domain}
@@ -233,10 +225,8 @@ export function SearchBox() {
                   <p className="text-xs text-slate-500">
                     {r.available
                       ? mode === 'own'
-                        ? 'Your domain · add to dashboard'
-                        : ip.trim()
-                        ? `Will point to ${ip.trim()}`
-                        : `Free on ${PARENT_DOMAIN}`
+                        ? 'Own domain · Cloudflare auto DNS'
+                        : 'Free hostname'
                       : 'Already taken here'}
                   </p>
                 </div>
@@ -248,12 +238,9 @@ export function SearchBox() {
                   className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white text-sm font-semibold rounded-xl flex items-center gap-2"
                 >
                   {registering === r.domain ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      ...
-                    </>
+                    <Loader2 className="w-4 h-4 animate-spin" />
                   ) : mode === 'own' ? (
-                    'Add domain'
+                    'Add + auto DNS'
                   ) : (
                     'Connect'
                   )}
