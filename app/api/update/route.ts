@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { findDynuDomainId, isDynuConfigured, updateDynuIp } from '@/lib/dynu';
+import { isCloudflareConfigured, pointOwnDomainToIp } from '@/lib/cloudflare';
 
-/**
- * Dynu-compatible IP update
- * GET /api/update?hostname=name.kozow.com&token=TOKEN&myip=1.2.3.4
- */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const hostname =
@@ -59,27 +56,34 @@ export async function GET(request: NextRequest) {
     return new NextResponse(result, { status: 401, headers: { 'Content-Type': 'text/plain' } });
   }
 
-  // Push to Dynu for real public DNS
-  if (myip && isDynuConfigured()) {
-    try {
-      const { data: row } = await supabase
-        .from('domains')
-        .select('dynu_id, name')
-        .eq('name', hostname.toLowerCase())
-        .maybeSingle();
+  const { data: row } = await supabase
+    .from('domains')
+    .select('dynu_id, name, is_own')
+    .eq('name', hostname.toLowerCase())
+    .maybeSingle();
 
-      let dynuId = row?.dynu_id as number | null;
+  // Free Dynu hostname
+  if (myip && row && !row.is_own && isDynuConfigured()) {
+    try {
+      let dynuId = row.dynu_id as number | null;
       if (!dynuId) {
         dynuId = await findDynuDomainId(hostname.toLowerCase());
-        if (dynuId && row) {
+        if (dynuId) {
           await supabase.from('domains').update({ dynu_id: dynuId }).eq('name', hostname.toLowerCase());
         }
       }
-      if (dynuId) {
-        await updateDynuIp(dynuId, myip);
-      }
+      if (dynuId) await updateDynuIp(dynuId, myip);
     } catch {
-      // DB update succeeded; Dynu may fail — still return good for client
+      // ignore
+    }
+  }
+
+  // Own domain → Cloudflare auto update (no manual A record)
+  if (myip && row?.is_own && isCloudflareConfigured()) {
+    try {
+      await pointOwnDomainToIp(hostname.toLowerCase(), myip, true);
+    } catch {
+      // DB ok; CF may fail if zone missing
     }
   }
 

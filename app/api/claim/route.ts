@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { createOrUpdateDynuHostname, isDynuConfigured } from '@/lib/dynu';
+import { isCloudflareConfigured, pointOwnDomainToIp } from '@/lib/cloudflare';
 import {
   PARENT_DOMAIN,
   isValidHostnameLabel,
@@ -10,7 +11,7 @@ import {
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({}));
-  const mode = body.mode === 'own' ? 'own' : 'free'; // free = kozow.com, own = custom domain
+  const mode = body.mode === 'own' ? 'own' : 'free';
   const hostname = String(body.hostname || '').toLowerCase().trim();
   const ipv4 = body.ipv4 ? String(body.ipv4).trim() : null;
 
@@ -25,13 +26,13 @@ export async function POST(request: NextRequest) {
   if (mode === 'own') {
     if (!isValidOwnDomain(hostname)) {
       return NextResponse.json(
-        { error: 'Invalid own domain. Example: myblog.com or home.mydomain.com' },
+        { error: 'Invalid own domain. Example: myblog.com' },
         { status: 400 }
       );
     }
     full = hostname;
     const parts = full.split('.');
-    tld = parts.slice(-2).join('.'); // rough eTLD+1
+    tld = parts.slice(-2).join('.');
     isOwn = true;
   } else {
     let node = hostname;
@@ -75,19 +76,37 @@ export async function POST(request: NextRequest) {
   }
 
   let dynuId: number | null = null;
+  let cfNote = '';
 
-  // Only free kozow.com goes through Dynu for public DNS
+  // Free kozow.com → Dynu
   if (!isOwn && isDynuConfigured()) {
     try {
       const dynu = await createOrUpdateDynuHostname(full, ipv4);
       dynuId = dynu.id;
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Dynu API failed';
+      return NextResponse.json({ error: `Dynu DNS error: ${msg}` }, { status: 502 });
+    }
+  }
+
+  // Own domain → Cloudflare auto A records (no manual add at registrar)
+  if (isOwn && ipv4 && isCloudflareConfigured()) {
+    try {
+      const cf = await pointOwnDomainToIp(full, ipv4, true);
+      cfNote = ` Cloudflare updated: ${cf.records.join(', ')} → ${ipv4}`;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Cloudflare failed';
       return NextResponse.json(
-        { error: `Dynu DNS error: ${msg}` },
+        {
+          error: `Cloudflare: ${msg}`,
+          hint: 'Domain must already be added in your Cloudflare account (free). Nameservers once at registrar, then this app manages all records.',
+        },
         { status: 502 }
       );
     }
+  } else if (isOwn && ipv4 && !isCloudflareConfigured()) {
+    cfNote =
+      ' (CLOUDFLARE_API_TOKEN not set — domain saved in DB only. Add token on Vercel for auto DNS.)';
   }
 
   const { data: domainId, error } = await supabase.rpc('claim_domain', {
@@ -107,7 +126,7 @@ export async function POST(request: NextRequest) {
         dynu_id: dynuId,
         is_own: isOwn,
         nameservers: isOwn
-          ? ['ns1.freedomainhub.com', 'ns2.freedomainhub.com']
+          ? ['(Cloudflare nameservers for your zone)']
           : ['ns0.dynu.com', 'ns1.dynu.com', 'ns3.dynu.com', 'ns4.dynu.com'],
       })
       .eq('id', domainId);
@@ -119,11 +138,11 @@ export async function POST(request: NextRequest) {
     ipv4,
     is_own: isOwn,
     dynu_id: dynuId,
-    public_dns: !isOwn && isDynuConfigured(),
+    cloudflare: isOwn && isCloudflareConfigured(),
     message: isOwn
-      ? `${full} added as your own domain. Point A record / NS at your registrar to your IP, or manage records here.`
+      ? `${full} added.${cfNote}`
       : isDynuConfigured()
       ? `${full} live on Dynu → ${ipv4 || 'set IP next'}`
-      : `${full} saved. Add DYNU_API_KEY for public kozow.com DNS.`,
+      : `${full} saved.`,
   });
 }
