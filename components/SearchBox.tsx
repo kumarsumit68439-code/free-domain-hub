@@ -30,9 +30,13 @@ export function SearchBox() {
     if (mode === 'own') {
       const full = query.trim().toLowerCase();
       if (!isValidOwnDomain(full)) {
+        setMessage({ type: 'error', text: 'Enter your domain, e.g. myblog.com' });
+        return;
+      }
+      if (!ip.trim() || !/^(\d{1,3}\.){3}\d{1,3}$/.test(ip.trim())) {
         setMessage({
           type: 'error',
-          text: 'Enter a full domain you own, e.g. myblog.com',
+          text: 'Own domain: sirf IP se connect — valid public IP required (e.g. 203.0.113.10)',
         });
         return;
       }
@@ -45,7 +49,7 @@ export function SearchBox() {
 
     const base = query.trim().toLowerCase().split('.')[0];
     if (!base || !isValidHostnameLabel(base)) {
-      setMessage({ type: 'error', text: 'Valid hostname only (letters, numbers, hyphens)' });
+      setMessage({ type: 'error', text: 'Valid hostname only' });
       return;
     }
 
@@ -72,8 +76,12 @@ export function SearchBox() {
     }
 
     const ipTrim = ip.trim();
+    if (mode === 'own' && (!ipTrim || !/^(\d{1,3}\.){3}\d{1,3}$/.test(ipTrim))) {
+      setMessage({ type: 'error', text: 'Own domain needs IP only — enter public IP' });
+      return;
+    }
     if (ipTrim && !/^(\d{1,3}\.){3}\d{1,3}$/.test(ipTrim)) {
-      setMessage({ type: 'error', text: 'Invalid IPv4. Example: 203.0.113.10' });
+      setMessage({ type: 'error', text: 'Invalid IPv4' });
       return;
     }
 
@@ -83,25 +91,25 @@ export function SearchBox() {
     const res = await fetch('/api/claim', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        mode,
-        hostname: fullDomain,
-        ipv4: ipTrim || null,
-      }),
+      body: JSON.stringify({ mode, hostname: fullDomain, ipv4: ipTrim || null }),
     });
     const json = await res.json();
 
     if (!res.ok) {
-      setMessage({
-        type: 'error',
-        text: json.error || json.hint || 'Failed',
-      });
+      setMessage({ type: 'error', text: json.error || json.hint || 'Failed' });
       setRegistering(null);
       return;
     }
 
     setRegistering(null);
-    setMessage({ type: 'success', text: json.message || `Added ${fullDomain}` });
+    setMessage({
+      type: 'success',
+      text:
+        json.message ||
+        (mode === 'own'
+          ? `${fullDomain} → ${ipTrim} connected (auto DNS)`
+          : `Claimed ${fullDomain}`),
+    });
     setResults((prev) =>
       prev ? prev.map((r) => (r.domain === fullDomain ? { ...r, available: false } : r)) : null
     );
@@ -109,7 +117,7 @@ export function SearchBox() {
     setTimeout(() => {
       router.push(`/domain/${encodeURIComponent(fullDomain)}`);
       router.refresh();
-    }, 1200);
+    }, 1000);
   };
 
   return (
@@ -139,7 +147,7 @@ export function SearchBox() {
             mode === 'own' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'
           }`}
         >
-          Own domain
+          Own domain · IP only
         </button>
       </div>
 
@@ -153,8 +161,8 @@ export function SearchBox() {
               onChange={(e) => setQuery(e.target.value)}
               placeholder={
                 mode === 'free'
-                  ? `Hostname (e.g. myserver → myserver.${PARENT_DOMAIN})`
-                  : 'Your domain (e.g. myblog.com)'
+                  ? `Hostname → *.${PARENT_DOMAIN}`
+                  : 'Your domain e.g. myblog.com'
               }
               className="w-full pl-12 pr-4 py-4 text-lg rounded-2xl border-2 border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-100 outline-none transition-all shadow-sm"
             />
@@ -162,7 +170,7 @@ export function SearchBox() {
           <button
             type="submit"
             disabled={searching}
-            className="px-8 py-4 bg-brand-600 hover:bg-brand-700 disabled:bg-brand-400 text-white font-semibold rounded-2xl transition-colors shadow-lg shadow-brand-200 flex items-center gap-2"
+            className="px-8 py-4 bg-brand-600 hover:bg-brand-700 disabled:bg-brand-400 text-white font-semibold rounded-2xl shadow-lg shadow-brand-200"
           >
             {searching ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Search'}
           </button>
@@ -172,19 +180,24 @@ export function SearchBox() {
           type="text"
           value={ip}
           onChange={(e) => setIp(e.target.value)}
-          placeholder="Public IP (optional) e.g. 203.0.113.10"
+          placeholder={
+            mode === 'own'
+              ? 'Public IP required — e.g. 203.0.113.10 (no A/CNAME manual)'
+              : 'Public IP (optional)'
+          }
           className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-brand-500 outline-none text-sm font-mono"
+          required={mode === 'own'}
         />
 
         <p className="text-xs text-slate-500 text-left">
-          {mode === 'free' ? (
+          {mode === 'own' ? (
             <>
-              <strong>Free Dynu:</strong> *.{PARENT_DOMAIN} — DYNU_API_KEY se public DNS.
+              <strong>Sirf IP:</strong> A / AAAA / CNAME / TXT nahi dalna. Connect = auto records + Cloudflare
+              (token set ho to).
             </>
           ) : (
             <>
-              <strong>Own domain + Cloudflare:</strong> domain Cloudflare pe ek baar add ho, phir yahan IP daalte hi A
-              record <em>auto</em> banega — registrar pe baar-baar record add nahi karna.
+              Free hostname on {PARENT_DOMAIN}. IP optional here; baad mein bhi set kar sakte ho.
             </>
           )}
         </p>
@@ -225,9 +238,9 @@ export function SearchBox() {
                   <p className="text-xs text-slate-500">
                     {r.available
                       ? mode === 'own'
-                        ? 'Own domain · Cloudflare auto DNS'
-                        : 'Free hostname'
-                      : 'Already taken here'}
+                        ? `→ ${ip.trim()} (auto A + www)`
+                        : 'Available'
+                      : 'Already taken'}
                   </p>
                 </div>
               </div>
@@ -239,8 +252,6 @@ export function SearchBox() {
                 >
                   {registering === r.domain ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : mode === 'own' ? (
-                    'Add + auto DNS'
                   ) : (
                     'Connect'
                   )}
